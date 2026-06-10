@@ -62,6 +62,9 @@ class FogGridWorld(gym.Env):
         energy_count: Number of ENERGY pickup cells placed per episode.
         max_steps:    Hard step limit; triggers truncation (not termination).
         render_mode:  Reserved for future use; unused.
+        fixed_map:    If True the map layout is generated once and reused every
+                      episode (only the agent start position changes).  Useful
+                      for isolating memorisation vs. generalisation.
     """
 
     metadata: dict = {"render_modes": ["rgb_array"]}
@@ -78,6 +81,7 @@ class FogGridWorld(gym.Env):
         energy_count: int = 3,
         max_steps: int = 200,
         render_mode: Optional[str] = None,
+        fixed_map: bool = False,
     ) -> None:
         super().__init__()
 
@@ -91,6 +95,9 @@ class FogGridWorld(gym.Env):
         self.energy_count = energy_count
         self.max_steps = max_steps
         self.render_mode = render_mode
+        self.fixed_map = fixed_map
+        # Stores the canonical layout when fixed_map=True; set on first reset().
+        self._fixed_grid: Optional[np.ndarray] = None
 
         self._view_side: int = 2 * r_max + 1           # e.g. 5 for r_max=2
         self._obs_size: int = self._view_side ** 2 + 1  # 25 cells + energy = 26
@@ -119,7 +126,14 @@ class FogGridWorld(gym.Env):
         seed: Optional[int] = None,
         options: Optional[dict] = None,
     ) -> Tuple[np.ndarray, dict]:
-        """Start a new episode with a freshly generated random map.
+        """Start a new episode.
+
+        When ``fixed_map=False`` (default) a fresh random map is generated.
+        When ``fixed_map=True`` the map layout is generated once on the first
+        call and restored from that snapshot on every subsequent reset, so the
+        topology never changes between episodes.  Energy pickup cells consumed
+        during a prior episode are restored as well.  Only the agent's starting
+        position is re-sampled each episode.
 
         Args:
             seed:    Optional RNG seed for reproducibility.
@@ -130,7 +144,14 @@ class FogGridWorld(gym.Env):
         """
         super().reset(seed=seed)  # seeds self.np_random
 
-        self._grid = self._generate_map()
+        if self.fixed_map:
+            if self._fixed_grid is None:
+                self._fixed_grid = self._generate_map()
+            # Restore the canonical layout (energy pickups may have been consumed)
+            self._grid = self._fixed_grid.copy()
+        else:
+            self._grid = self._generate_map()
+
         self._agent_pos = self._sample_free(self._grid)  # type: ignore[assignment]
         if self._agent_pos is None:
             raise RuntimeError("Generated map has no FREE cell for agent placement.")

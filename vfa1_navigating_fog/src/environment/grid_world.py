@@ -7,7 +7,7 @@ layouts rather than memorise a fixed map.
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 import numpy as np
 import gymnasium as gym
@@ -23,6 +23,18 @@ from src.environment.cell_types import (
     REWARD_WALL,
 )
 
+
+# RGB colour palette indexed by CellType value (0–5) plus agent sentinel (6).
+# Extend this list when new CellTypes are added.
+_PALETTE: list[tuple[int, int, int]] = [
+    ( 28,  28,  28),  # 0 FOG    – near-black
+    (240, 240, 224),  # 1 FREE   – off-white
+    ( 96,  96,  96),  # 2 WALL   – grey
+    (204,  51,  51),  # 3 TRAP   – red
+    ( 51, 204,  85),  # 4 GOAL   – green
+    (255, 170,   0),  # 5 ENERGY – amber
+    ( 51, 153, 255),  # 6 AGENT  – blue (sentinel, not a CellType)
+]
 
 # Map each action to its (row_delta, col_delta) displacement.
 _ACTION_DELTAS: dict[int, Tuple[int, int]] = {
@@ -52,7 +64,7 @@ class FogGridWorld(gym.Env):
         render_mode:  Reserved for future use; unused.
     """
 
-    metadata: dict = {"render_modes": []}
+    metadata: dict = {"render_modes": ["rgb_array"]}
 
     def __init__(
         self,
@@ -285,6 +297,151 @@ class FogGridWorld(gym.Env):
 
         energy_norm = np.float32(self._energy / self.E_max)
         return np.append(cells, energy_norm)
+
+    # ------------------------------------------------------------------
+    # Rendering
+    # ------------------------------------------------------------------
+
+    def render(self) -> Optional[np.ndarray]:
+        """Return a pixel-art RGB array of the current state.
+
+        Only active when the environment was created with
+        ``render_mode="rgb_array"``.  Each grid cell is drawn as a
+        ``_CELL_SIZE × _CELL_SIZE`` pixel block; cells outside the
+        agent's current visible radius are painted with the FOG colour.
+
+        Returns:
+            uint8 array of shape ``(grid_size*32, grid_size*32, 3)``,
+            or ``None`` when render_mode is not "rgb_array".
+        """
+        if self.render_mode != "rgb_array":
+            return None
+
+        cs = 32  # pixels per cell
+        r_a, c_a = self._agent_pos
+        rho = self._visible_radius()
+
+        img = np.zeros((self.grid_size * cs, self.grid_size * cs, 3), dtype=np.uint8)
+
+        for r in range(self.grid_size):
+            for c in range(self.grid_size):
+                if r == r_a and c == c_a:
+                    color = _PALETTE[6]                       # agent sentinel
+                elif abs(r - r_a) > rho or abs(c - c_a) > rho:
+                    color = _PALETTE[CellType.FOG]            # outside visible radius
+                else:
+                    color = _PALETTE[self._grid[r, c]]
+                img[r * cs:(r + 1) * cs, c * cs:(c + 1) * cs] = color
+
+        return img
+
+    def render_frame(self, ax: Optional[Any] = None, fog: bool = True) -> Any:
+        """Render the current state as a matplotlib Axes for Jupyter notebooks.
+
+        Builds a colour-coded view of the grid.  When ``fog=True``
+        (default) cells outside the current visible radius are shown as
+        FOG, mirroring the agent's actual observation.  Set
+        ``fog=False`` to reveal the full map (useful for debugging).
+
+        Typical notebook usage::
+
+            fig, ax = plt.subplots(figsize=(5, 5))
+            env.render_frame(ax)
+            plt.tight_layout()
+            plt.show()
+
+        For a step-by-step animation use ``IPython.display.clear_output``::
+
+            from IPython.display import clear_output
+            obs, _ = env.reset(seed=0)
+            while True:
+                clear_output(wait=True)
+                fig, ax = plt.subplots(figsize=(5, 5))
+                env.render_frame(ax)
+                plt.tight_layout(); plt.show()
+                action = env.action_space.sample()
+                _, _, terminated, truncated, _ = env.step(action)
+                if terminated or truncated:
+                    break
+
+        Args:
+            ax:  An existing ``matplotlib.axes.Axes`` to draw into, or
+                 ``None`` to create a new figure automatically.
+            fog: If ``True``, mask cells outside the visible radius with
+                 the FOG colour.  If ``False``, show the full grid.
+
+        Returns:
+            The populated ``matplotlib.axes.Axes``.
+        """
+        import matplotlib.pyplot as plt
+        import matplotlib.patches as mpatches
+        from matplotlib.colors import ListedColormap
+
+        if ax is None:
+            _, ax = plt.subplots(figsize=(6, 6))
+
+        r_a, c_a = self._agent_pos
+        rho = self._visible_radius()
+
+        # Vectorised fog mask: True where cell is outside visible radius
+        rows = np.arange(self.grid_size)
+        cols = np.arange(self.grid_size)
+        fog_mask = (
+            (np.abs(rows[:, None] - r_a) > rho) |
+            (np.abs(cols[None, :] - c_a) > rho)
+        )
+
+        # display uses float so we can store the agent sentinel (6)
+        display = self._grid.astype(float)
+        if fog:
+            display[fog_mask] = float(CellType.FOG)
+        display[r_a, c_a] = 6.0  # agent drawn on top of whatever cell it's on
+
+        hex_colors = [f"#{r:02x}{g:02x}{b:02x}" for r, g, b in _PALETTE]
+        cmap = ListedColormap(hex_colors)
+
+        ax.imshow(display, cmap=cmap, vmin=0, vmax=6, interpolation="nearest")
+
+        # Minor tick grid lines delineate cells cleanly
+        ax.set_xticks(np.arange(-0.5, self.grid_size, 1), minor=True)
+        ax.set_yticks(np.arange(-0.5, self.grid_size, 1), minor=True)
+        ax.grid(which="minor", color="#222222", linewidth=0.5)
+        ax.tick_params(which="both", bottom=False, left=False,
+                       labelbottom=False, labelleft=False)
+
+        ax.set_title(
+            f"Step {self._steps}  ·  Energy {self._energy}/{self.E_max}"
+            f"  ·  ρ = {rho}",
+            fontsize=11,
+        )
+
+        # Legend: one patch per visible CellType + agent
+        legend_handles = [
+            mpatches.Patch(
+                facecolor=hex_colors[ct.value],
+                edgecolor="#444444",
+                linewidth=0.5,
+                label=ct.name,
+            )
+            for ct in CellType
+            if ct != CellType.FOG
+        ] + [
+            mpatches.Patch(
+                facecolor=hex_colors[6],
+                edgecolor="#444444",
+                linewidth=0.5,
+                label="AGENT",
+            )
+        ]
+        ax.legend(
+            handles=legend_handles,
+            loc="upper left",
+            bbox_to_anchor=(1.02, 1.0),
+            fontsize=8,
+            framealpha=0.95,
+        )
+
+        return ax
 
     def _get_info(self) -> dict:
         """Return auxiliary diagnostic information (not part of obs).

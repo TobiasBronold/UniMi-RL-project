@@ -4,13 +4,14 @@ Approximates Q-values with a linear model:
 
     Q(s, a) ≈ phi(s, a)^T · theta
 
-where ``phi`` is the hand-crafted 5-dimensional feature vector defined in
-``src.features.feature_extractor`` and ``theta`` is a shared weight vector
-learned via the semi-gradient TD(0) update:
+where ``phi`` is produced by a pluggable feature extractor and ``theta`` is a
+shared weight vector learned via the semi-gradient TD(0) update:
 
     delta = r + gamma * max_a' Q(s', a') − Q(s, a)
     theta  ← theta + alpha * delta * phi(s, a)
 
+Pass a ``SimpleFeatureExtractor`` (default) or a ``RichFeatureExtractor`` at
+construction time; ``LinearFAAgent`` adapts its theta dimension automatically.
 Because ``phi`` can be computed for *any* observation, including states never
 seen during training, the agent generalises across grid sizes and random map
 layouts where the tabular agent fails.
@@ -18,9 +19,11 @@ layouts where the tabular agent fails.
 
 from __future__ import annotations
 
+from typing import Optional
+
 import numpy as np
 
-from src.features.feature_extractor import N_FEATURES, phi
+from src.features.feature_extractor import SimpleFeatureExtractor
 
 
 class LinearFAAgent:
@@ -32,14 +35,19 @@ class LinearFAAgent:
     ``phi`` is defined everywhere, not just on visited states.
 
     Args:
-        n_actions:      Size of the discrete action space (4 for FogGridWorld).
-        max_steps:      Episode step limit; must match ``FogGridWorld.max_steps``.
-                        Used to normalise the ``step_progress`` feature in ``phi``.
-        alpha:          Learning rate for the semi-gradient update.
-        gamma:          Discount factor — weight of future rewards.
-        epsilon_start:  Initial exploration probability (1.0 = fully random).
-        epsilon_end:    Floor for epsilon; exploration never drops below this.
-        epsilon_decay:  Multiplicative factor applied to epsilon each episode.
+        n_actions:          Size of the discrete action space (4 for FogGridWorld).
+        max_steps:          Episode step limit; must match ``FogGridWorld.max_steps``.
+                            Used to normalise the ``step_progress`` feature.
+        alpha:              Learning rate for the semi-gradient update.
+        gamma:              Discount factor — weight of future rewards.
+        epsilon_start:      Initial exploration probability (1.0 = fully random).
+        epsilon_end:        Floor for epsilon; exploration never drops below this.
+        epsilon_decay:      Multiplicative factor applied to epsilon each episode.
+        feature_extractor:  An instance of ``SimpleFeatureExtractor``,
+                            ``RichFeatureExtractor``, or any object with a
+                            ``phi(obs, action, steps, max_steps)`` method and an
+                            ``n_features`` integer attribute.  Defaults to
+                            ``SimpleFeatureExtractor()``.
     """
 
     def __init__(
@@ -51,6 +59,7 @@ class LinearFAAgent:
         epsilon_start: float = 1.0,
         epsilon_end: float = 0.05,
         epsilon_decay: float = 0.995,
+        feature_extractor: Optional[object] = None,
     ) -> None:
         """Initialise agent; theta starts at zeros, epsilon at epsilon_start."""
         self.n_actions = n_actions
@@ -61,8 +70,14 @@ class LinearFAAgent:
         self.epsilon_end = epsilon_end
         self.epsilon_decay = epsilon_decay
 
-        # Shared weight vector; length equals number of features in phi(s,a)
-        self.theta: np.ndarray = np.zeros(N_FEATURES, dtype=np.float64)
+        self.feature_extractor = (
+            feature_extractor if feature_extractor is not None else SimpleFeatureExtractor()
+        )
+
+        # theta dimension adapts to whichever extractor is injected
+        self.theta: np.ndarray = np.zeros(
+            self.feature_extractor.n_features, dtype=np.float64
+        )
 
         # Steps taken so far in the current episode — used for step_progress
         self._steps: int = 0
@@ -120,7 +135,7 @@ class LinearFAAgent:
             truncated:  True if the episode was cut off by the step limit.
         """
         step = self._steps
-        features = phi(obs, action, step, self.max_steps)
+        features = self.feature_extractor.phi(obs, action, step, self.max_steps)
         q_sa = float(features @ self.theta)
 
         if terminated:
@@ -160,7 +175,9 @@ class LinearFAAgent:
         Returns:
             Scalar Q-value estimate.
         """
-        return float(phi(obs, action, step, self.max_steps) @ self.theta)
+        return float(
+            self.feature_extractor.phi(obs, action, step, self.max_steps) @ self.theta
+        )
 
     # ------------------------------------------------------------------
     # Diagnostics
@@ -171,6 +188,6 @@ class LinearFAAgent:
         """Current weight vector theta (copy).
 
         Returns:
-            Float64 array of shape (N_FEATURES,) with one weight per feature.
+            Float64 array of shape ``(n_features,)`` with one weight per feature.
         """
         return self.theta.copy()

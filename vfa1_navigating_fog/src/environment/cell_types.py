@@ -33,6 +33,7 @@ class Action(IntEnum):
 
 REWARD_GOAL: float = 1.0    # reaching the goal
 REWARD_TRAP: float = -1.0   # entering a trap
-REWARD_ENERGY: float = 0.2  # collecting an energy pickup
+REWARD_ENERGY: float = 0.3  # collecting an energy pickup
 REWARD_WALL: float = -0.05  # bumping into a wall (no movement)
-REWARD_STEP: float = -0.01  # any normal movement step
+REWARD_STEP: float = -0.005  # any normal movement step
+REWARD_STARVE: float = -0.5  # energy depleted to zero

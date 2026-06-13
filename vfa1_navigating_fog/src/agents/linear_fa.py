@@ -103,8 +103,9 @@ class LinearFAAgent:
         if not greedy and np.random.random() < self.epsilon:
             return int(np.random.randint(self.n_actions))
 
-        q_values = [self._q(obs, a, self._steps) for a in range(self.n_actions)]
-        return int(np.argmax(q_values))
+        q_arr = np.array([self._q(obs, a, self._steps) for a in range(self.n_actions)])
+        best = np.where(q_arr == q_arr.max())[0]
+        return int(np.random.choice(best))
 
     def update(
         self,

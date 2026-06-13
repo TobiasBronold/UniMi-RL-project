@@ -18,6 +18,7 @@ from src.environment.cell_types import (
     CellType,
     REWARD_ENERGY,
     REWARD_GOAL,
+    REWARD_STARVE,
     REWARD_STEP,
     REWARD_TRAP,
     REWARD_WALL,
@@ -72,7 +73,7 @@ class FogGridWorld(gym.Env):
     def __init__(
         self,
         grid_size: int = 10,
-        r_max: int = 2,
+        r_max: int = 3,
         r_min: int = 1,
         E_max: int = 100,
         delta_e: int = 30,
@@ -205,6 +206,7 @@ class FogGridWorld(gym.Env):
                 self._grid[nr, nc] = CellType.FREE  # consumed after pickup
 
         if self._energy == 0:
+            reward = REWARD_STARVE
             terminated = True
 
         # Truncation: time limit exceeded, but no terminal MDP state reached
@@ -277,13 +279,21 @@ class FogGridWorld(gym.Env):
     def _visible_radius(self) -> int:
         """Compute the current visible radius from remaining energy.
 
-        Formula from DESIGN.md:
-            rho(e) = max(r_min, round(r_max * (e / E_max)))
+        Step schedule (three visibility tiers):
+            energy > 50 %  →  r = 3  (7×7 window, full sight)
+            energy > 20 %  →  r = 2  (5×5 window)
+            energy ≤ 20 %  →  r = 1  (3×3 window, near-blind)
 
         Returns:
-            Integer radius in [r_min, r_max].
+            Integer radius in {1, 2, 3}.
         """
-        return max(self.r_min, round(self.r_max * (self._energy / self.E_max)))
+        frac = self._energy / self.E_max
+        if frac > 0.5:
+            return 3
+        elif frac > 0.2:
+            return 2
+        else:
+            return 1
 
     def _get_obs(self) -> np.ndarray:
         """Build the fixed-length float32 observation vector.

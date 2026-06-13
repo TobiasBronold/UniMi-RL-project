@@ -43,10 +43,6 @@ vfa1_navigating_fog/
 │       └── env_visualization.ipynb  # Jupyter notebook — environment walkthrough & visualisation
 │
 ├── results/                         # Generated plots and CSV logs (created at runtime)
-│
-└── task/
-    ├── DESIGN.md                    # Full MDP specification (authoritative reference)
-    └── projectdescription.md        # Original assignment brief from the professor
 ```
 
 ---

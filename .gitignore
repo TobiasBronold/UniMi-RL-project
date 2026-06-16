@@ -6,4 +6,3 @@ __pycache__/
 *.egg-info/
 task/
 CLAUDE.md
-.DS_Store

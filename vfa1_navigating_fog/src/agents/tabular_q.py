@@ -138,7 +138,7 @@ class TabularQAgent:
         holding a reference to the original numpy array.
 
         Args:
-            obs: Float32 array from FogGridWorld (length 26).
+            obs: Float32 array from FogGridWorld (length 50).
 
         Returns:
             Tuple of Python floats, one per observation element.

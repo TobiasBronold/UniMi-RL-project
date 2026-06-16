@@ -109,13 +109,13 @@ class SimpleFeatureExtractor:
         self,
         obs: np.ndarray,
         action: int,
-        steps: int,
-        max_steps: int,
+        _steps: int,
+        _max_steps: int,
     ) -> np.ndarray:
         """Compute the 5-element feature vector for ``(obs, action)``.
 
         Args:
-            obs:       Float32 observation of length 26 from FogGridWorld.
+            obs:       Float32 observation of length 50 from FogGridWorld.
             action:    Integer action in {0=UP, 1=DOWN, 2=LEFT, 3=RIGHT}.
             steps:     Steps already taken in the current episode (unused, kept for API).
             max_steps: Maximum steps per episode (unused, kept for API).
@@ -178,13 +178,13 @@ class RichFeatureExtractor:
         self,
         obs: np.ndarray,
         action: int,
-        steps: int,
-        max_steps: int,
+        _steps: int,
+        _max_steps: int,
     ) -> np.ndarray:
         """Compute the 11-element feature vector for ``(obs, action)``.
 
         Args:
-            obs:       Float32 observation of length 26 from FogGridWorld.
+            obs:       Float32 observation of length 50 from FogGridWorld.
             action:    Integer action in {0=UP, 1=DOWN, 2=LEFT, 3=RIGHT}.
             steps:     Steps already taken in the current episode (unused, kept for API).
             max_steps: Maximum steps per episode (unused, kept for API).
@@ -247,7 +247,7 @@ def phi(
     ``SimpleFeatureExtractor`` or ``RichFeatureExtractor`` directly.
 
     Args:
-        obs:       Float32 observation of length 26.
+        obs:       Float32 observation of length 50.
         action:    Integer action in {0, 1, 2, 3}.
         steps:     Steps taken so far in the current episode.
         max_steps: Maximum episode length.

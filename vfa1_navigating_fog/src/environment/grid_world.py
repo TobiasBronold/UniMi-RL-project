@@ -54,7 +54,7 @@ class FogGridWorld(gym.Env):
 
     Args:
         grid_size:    Side length of the square grid.
-        r_max:        Maximum visible radius at full energy (5×5 view).
+        r_max:        Maximum visible radius at full energy (7×7 view).
         r_min:        Minimum visible radius at low energy (3×3 view).
         E_max:        Starting energy budget; depletes by 1 each step.
         delta_e:      Energy restored by visiting an ENERGY pickup cell.
@@ -100,8 +100,8 @@ class FogGridWorld(gym.Env):
         # Stores the canonical layout when fixed_map=True; set on first reset().
         self._fixed_grid: Optional[np.ndarray] = None
 
-        self._view_side: int = 2 * r_max + 1           # e.g. 5 for r_max=2
-        self._obs_size: int = self._view_side ** 2 + 1  # 25 cells + energy = 26
+        self._view_side: int = 2 * r_max + 1           # e.g. 7 for r_max=3
+        self._obs_size: int = self._view_side ** 2 + 1  # 49 cells + energy = 50
 
         obs_low = np.zeros(self._obs_size, dtype=np.float32)
         obs_high = np.full(self._obs_size, float(max(CellType)), dtype=np.float32)

@@ -37,7 +37,6 @@ class LinearFAAgent:
     Args:
         n_actions:          Size of the discrete action space (4 for FogGridWorld).
         max_steps:          Episode step limit; must match ``FogGridWorld.max_steps``.
-                            Used to normalise the ``step_progress`` feature.
         alpha:              Learning rate for the semi-gradient update.
         gamma:              Discount factor — weight of future rewards.
         epsilon_start:      Initial exploration probability (1.0 = fully random).
@@ -79,7 +78,7 @@ class LinearFAAgent:
             self.feature_extractor.n_features, dtype=np.float64
         )
 
-        # Steps taken so far in the current episode — used for step_progress
+        # Steps taken so far in the current episode (passed to phi() for API compatibility)
         self._steps: int = 0
 
     # ------------------------------------------------------------------
@@ -124,8 +123,7 @@ class LinearFAAgent:
             theta  ← theta + alpha * delta * phi(s, a)
 
         On terminal transitions the bootstrap term is dropped and the target
-        is just ``r``.  ``step_progress`` for the successor state is evaluated
-        at ``self._steps + 1`` so the feature is temporally consistent.
+        is just ``r``.
 
         Args:
             obs:        Observation before the step (s).
@@ -171,7 +169,7 @@ class LinearFAAgent:
         Args:
             obs:    Observation vector.
             action: Integer action.
-            step:   Step count within the episode (for step_progress feature).
+            step:   Step count within the episode.
 
         Returns:
             Scalar Q-value estimate.
